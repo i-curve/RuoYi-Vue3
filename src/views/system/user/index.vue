@@ -65,12 +65,13 @@
               <el-table-column label="手机号码" align="center" key="phonenumber" prop="phonenumber" v-if="columns.phonenumber.visible" width="120" />
               <el-table-column label="状态" align="center" key="status" v-if="columns.status.visible">
                 <template #default="scope">
-                  <el-switch
-                    v-model="scope.row.status"
-                    active-value="0"
-                    inactive-value="1"
-                    @change="handleStatusChange(scope.row)"
-                  ></el-switch>
+                  <el-switch v-model="scope.row.status" active-value="0" inactive-value="1"
+                    @change="handleStatusChange(scope.row)"></el-switch>
+                </template>
+              </el-table-column>
+              <el-table-column label="谷歌认证" align="center" key="googleCode" v-if="columns.googleCode.visible">
+                <template #default="scope">
+                  <el-button @click="handleBindGoogle(scope.row)">{{ scope.row.googleCode ? '已启用' : "未启用" }}</el-button>
                 </template>
               </el-table-column>
               <el-table-column label="创建时间" align="center" prop="createTime" v-if="columns.createTime.visible" width="160">
@@ -210,13 +211,31 @@
         </div>
       </template>
     </el-dialog>
+    <el-dialog :title="bind.title" v-model="bind.open" width="500px" append-to-body>
+      <el-form ref="bindRef" :model="bind.form" :rules="bind.rules" label-width="120px">
+        <div style="text-align: center">请通过谷歌二次认证 app 扫描下面二维码获取 code 进行验证</div>
+        <el-form-item label="谷歌认证码">
+          <img :src="bind.dataimg" style="width: 200px; height: 200px" />
+        </el-form-item>
+        <el-form-item label="谷歌认证码" prop="code">
+          <el-input v-model="bind.form.code" placeholder="请输入认证码" style="width: 300px" />
+        </el-form-item>
+        <div style="margin-left: 70px">如果不能扫码, 请复制下面秘钥: <br /><br />{{ bind.form.googleSecret }}</div>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button type="primary" @click="submitBindGoogleCode">确 定</el-button>
+          <el-button @click="bind.open = false">取 消</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup name="User">
 import { getToken } from "@/utils/auth"
 import useAppStore from '@/store/modules/app'
-import { changeUserStatus, listUser, resetUserPwd, delUser, getUser, updateUser, addUser, deptTreeSelect } from "@/api/system/user"
+import { changeUserStatus, listUser, resetUserPwd, delUser, getUser, updateUser, addUser, deptTreeSelect, generateGoogleSecret, bindGoogleCode } from "@/api/system/user"
 import { Splitpanes, Pane } from "splitpanes"
 import "splitpanes/dist/splitpanes.css"
 
@@ -256,6 +275,19 @@ const upload = reactive({
   // 上传的地址
   url: import.meta.env.VITE_APP_BASE_API + "/system/user/importData"
 })
+const bind = reactive({
+  open: false,
+  title: "",
+  dataimg: "",
+  form: {
+    googleSecret: undefined,
+    code: undefined,
+    userId: undefined
+  },
+  rules: {
+    code: [{ required: true, message: "请输入谷歌认证码", trigger: "blur" }]
+  }
+})
 // 列显隐信息
 const columns = ref({
   userId: { label: '用户编号', visible: true },
@@ -264,6 +296,7 @@ const columns = ref({
   deptName: { label: '部门', visible: true },
   phonenumber: { label: '手机号码', visible: true },
   status: { label: '状态', visible: true },
+  googleCode: { label: '谷歌认证码', visible: true },
   createTime: { label: '创建时间', visible: true }
 })
 
@@ -528,6 +561,20 @@ function handleUpdate(row) {
   })
 }
 
+/** 绑定谷歌码 */
+function handleBindGoogle(row) {
+  generateGoogleSecret(row.userName).then(response => {
+    bind.open = true
+    bind.title = "绑定谷歌认证码"
+    bind.dataimg = response?.data?.dataimg;
+    bind.form = {
+      googleSecret: response?.data?.secret,
+      userId: response?.data?.userId,
+      code: null
+    }
+  })
+}
+
 /** 提交按钮 */
 function submitForm() {
   proxy.$refs["userRef"].validate(valid => {
@@ -545,6 +592,19 @@ function submitForm() {
           getList()
         })
       }
+    }
+  })
+}
+
+// 绑定谷歌认证码
+function submitBindGoogleCode() {
+  proxy.$refs["bindRef"].validate(valid => {
+    if (valid) {
+      bindGoogleCode(bind.form).then(response => {
+        bind.open = false;
+        getList()
+        proxy.$modal.msgSuccess("绑定成功")
+      })
     }
   })
 }
