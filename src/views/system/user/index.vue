@@ -64,6 +64,11 @@
               ></el-switch>
             </template>
           </el-table-column>
+          <el-table-column label="谷歌认证" align="center" key="googleCode" v-if="columns.googleCode.visible">
+            <template #default="scope">
+              <el-button @click="handleBindGoogle(scope.row)">{{ scope.row.googleCode ? '已启用' : "未启用" }}</el-button>
+            </template>
+          </el-table-column>
           <el-table-column label="创建时间" align="center" prop="createTime" v-if="columns.createTime.visible" width="160">
             <template #default="scope">
               <span>{{ parseTime(scope.row.createTime) }}</span>
@@ -176,7 +181,25 @@
         </div>
       </template>
     </el-dialog>
-
+    <!-- 绑定谷歌认证 -->
+    <el-dialog :title="google.title" v-model="google.open" width="500px" append-to-body>
+      <el-form ref="googleFormRef" :model="google.form" :rules="google.rules" label-width="120px">
+        <div style="text-align: center">请通过谷歌二次认证 app 扫描下面二维码获取 code 进行验证</div>
+        <el-form-item label="谷歌认证码">
+          <img :src="google.dataimg" style="width: 200px; height: 200px" />
+        </el-form-item>
+        <el-form-item label="谷歌认证码" prop="code">
+          <el-input v-model="google.form.code" placeholder="请输入认证码" style="width: 300px" />
+        </el-form-item>
+        <div style="margin-left: 70px">如果不能扫码, 请复制下面秘钥: <br/><br/>{{ google.form.googleSecret }}</div>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button type="primary" @click="submitBindGoogleCode">确 定</el-button>
+          <el-button @click="google.open = false">取 消</el-button>
+        </div>
+      </template>
+    </el-dialog>
     <!-- 用户详情抽屉 -->
     <user-view-drawer ref="userViewRef" />
     <!-- 用户导入对话框 -->
@@ -189,7 +212,7 @@ import TreePanel from "@/components/TreePanel"
 import ExcelImportDialog from "@/components/ExcelImportDialog"
 import UserViewDrawer from "./view"
 import { usePasswordRule } from "@/utils/passwordRule"
-import { changeUserStatus, listUser, resetUserPwd, delUser, getUser, updateUser, addUser, deptTreeSelect } from "@/api/system/user"
+import { changeUserStatus, listUser, resetUserPwd, delUser, getUser, updateUser, addUser, deptTreeSelect, generateGoogleSecret, bindGoogleCode } from "@/api/system/user"
 
 const router = useRouter()
 const { proxy } = getCurrentInstance()
@@ -209,6 +232,7 @@ const dateRange = ref([])
 const deptOptions = ref(undefined)
 const enabledDeptOptions = ref(undefined)
 const initPassword = ref(undefined)
+const googleFormRef = ref()
 const postOptions = ref([])
 const roleOptions = ref([])
 // 列显隐信息
@@ -219,11 +243,26 @@ const columns = ref({
   deptName: { label: '部门', visible: true },
   phonenumber: { label: '手机号码', visible: true },
   status: { label: '状态', visible: true },
+  googleCode: { label: '谷歌认证码', visible: true },
   createTime: { label: '创建时间', visible: true }
 })
 
 const data = reactive({
   form: {},
+  google: {
+    open: false,
+    title: '',
+    dataimg: null,
+    form: {
+      googleSecret: null,
+      code: null
+    },
+    rules: {
+      code: [
+        { required: true, message: "认证码不能为空", trigger: "blur" }
+      ]
+    }
+  },
   queryParams: {
     pageNum: 1,
     pageSize: 10,
@@ -240,7 +279,7 @@ const data = reactive({
   }
 })
 
-const { queryParams, form, rules } = toRefs(data)
+const { queryParams, form, google, rules } = toRefs(data)
 
 /** 查询用户列表 */
 function getList() {
@@ -425,6 +464,31 @@ function handleUpdate(row) {
     open.value = true
     title.value = "修改用户"
     form.value.password = ""
+  })
+}
+
+function handleBindGoogle(row) {
+  generateGoogleSecret(row.userName).then(response => {
+    google.value.open = true
+    google.value.title = "绑定谷歌认证码"
+    google.value.dataimg = response?.data?.dataimg
+    google.value.form = {
+      googleSecret: response?.data?.secret,
+      userId: response?.data?.userId,
+      code: null
+    }
+  })
+}
+
+function submitBindGoogleCode() {
+  googleFormRef.value.validate(valid => {
+    if (valid) {
+      bindGoogleCode(google.value.form).then(() => {
+        google.value.open = false
+        getList()
+        proxy.$modal.msgSuccess("绑定成功")
+      })
+    }
   })
 }
 

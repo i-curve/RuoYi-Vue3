@@ -1,5 +1,16 @@
 import request from '@/utils/request'
 
+// 获取认证方法
+export function getAuthType() {
+  return request({
+    url: '/loginType',
+    headers: {
+      isToken: false,
+    },
+    method: 'get'
+  })
+}
+
 // 登录方法
 export function login(username, password, code, uuid) {
   const data = {

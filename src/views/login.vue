@@ -25,7 +25,7 @@
           <template #prefix><svg-icon icon-class="password" class="el-input__icon input-icon" /></template>
         </el-input>
       </el-form-item>
-      <el-form-item prop="code" v-if="captchaEnabled">
+      <el-form-item prop="code" v-if="authType == '0'">
         <el-input
           v-model="loginForm.code"
           size="large"
@@ -39,6 +39,17 @@
         <div class="login-code">
           <img :src="codeUrl" @click="getCode" class="login-code-img"/>
         </div>
+      </el-form-item>
+      <el-form-item prop="code" v-else-if="authType == '1'">
+        <el-input
+          v-model="loginForm.code"
+          type="text"
+          auto-complete="off"
+          placeholder="谷歌验证码"
+          @keyup.enter.native="handleLogin"
+        >
+          <svg-icon slot="prefix" icon-class="validCode" class="el-input__icon input-icon" />
+        </el-input>
       </el-form-item>
       <el-checkbox v-model="loginForm.rememberMe" style="margin:0px 0px 25px 0px;">记住密码</el-checkbox>
       <el-form-item style="width:100%;">
@@ -65,7 +76,7 @@
 </template>
 
 <script setup>
-import { getCodeImg } from "@/api/login"
+import { getCodeImg, getAuthType } from "@/api/login"
 import Cookies from "js-cookie"
 import { encrypt, decrypt } from "@/utils/jsencrypt"
 import useUserStore from '@/store/modules/user'
@@ -73,6 +84,7 @@ import defaultSettings from '@/settings'
 
 const title = import.meta.env.VITE_APP_TITLE
 const footerContent = defaultSettings.footerContent
+const authType = ref(null)
 const userStore = useUserStore()
 const route = useRoute()
 const router = useRouter()
@@ -132,7 +144,7 @@ function handleLogin() {
       }).catch(() => {
         loading.value = false
         // 重新获取验证码
-        if (captchaEnabled.value) {
+        if (authType.value == '0') {
           getCode()
         }
       })
@@ -161,7 +173,12 @@ function getCookie() {
   }
 }
 
-getCode()
+getAuthType().then(response => {
+  authType.value = response?.data
+  if (!authType.value) {
+    getCode()
+  }
+})
 getCookie()
 </script>
 
